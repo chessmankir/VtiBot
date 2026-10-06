@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import * as Joi from 'joi';
 import { TelegramModule } from '../modules/telegram/telegram.module';
 
@@ -16,11 +17,15 @@ import { TelegramModule } from '../modules/telegram/telegram.module';
                     .pattern(/^-?\d+$/)
                     .required(),
 
+                TELEGRAM_THREAD_ID: Joi.number().integer().positive().optional(),
+
                 SELLER_API: Joi.string().required(),
 
                 USER_TOKEN: Joi.string().required(),
             }),
         }),
+
+        ScheduleModule.forRoot(),
 
         TelegramModule,
     ],

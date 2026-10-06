@@ -1,5 +1,6 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { LoadsService } from '../loads/loads.service';
 import { LoadTask } from '../loads/types/loads.type';
 
@@ -16,6 +17,7 @@ export class TelegramService {
     private readonly logger = new Logger(TelegramService.name);
     private readonly botToken: string;
     private readonly chatId: string;
+    private readonly threadId?: number;
 
     constructor(
         private readonly configService: ConfigService,
@@ -24,6 +26,7 @@ export class TelegramService {
         this.botToken = this.configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN');
 
         this.chatId = this.configService.getOrThrow<string>('TELEGRAM_CHAT_ID');
+        this.threadId = this.configService.get<number>('TELEGRAM_THREAD_ID');
     }
 
     async sendMessage(text: string): Promise<number> {
@@ -37,6 +40,7 @@ export class TelegramService {
                 },
                 body: JSON.stringify({
                     chat_id: this.chatId,
+                    ...(this.threadId ? { message_thread_id: this.threadId } : {}),
                     text,
                     disable_web_page_preview: true,
                 }),
@@ -87,6 +91,23 @@ export class TelegramService {
             counts,
             messageIds,
         };
+    }
+
+    @Cron('0 0 9 * * *', {
+        name: 'daily-load-errors-report',
+        timeZone: 'Europe/Moscow',
+        waitForCompletion: true,
+    })
+    async sendDailyLoadErrorsReport(): Promise<void> {
+        this.logger.log('Запуск ежедневного отчёта об ошибках загрузки');
+
+        try {
+            const result = await this.sendLatestLoadErrorsReport();
+            this.logger.log(`Ежедневный отчёт отправлен: ${result.total} ошибок, ${result.messageIds.length} сообщений`);
+        } catch (error) {
+            const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+            this.logger.error(`Не удалось отправить ежедневный отчёт: ${message}`);
+        }
     }
 
     private countByMarketplace(tasks: LoadTask[]): Record<Marketplace, number> {
